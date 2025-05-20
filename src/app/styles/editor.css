@@ -1,0 +1,26 @@
+.ProseMirror {
+    padding: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 200px;
+  }
+  
+  .ProseMirror:focus {
+    outline: none;
+    border-color: #2563eb;
+  }
+  .ProseMirror h1 {
+    font-size: 2em;
+    color: #333;
+  }
+  
+  .ProseMirror p {
+    line-height: 1.6;
+  }
+  
+  .ProseMirror ul,
+  .ProseMirror ol {
+    padding-left: 1.5em;
+  }
+  
+  
