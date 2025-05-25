@@ -1,82 +1,73 @@
 'use client'
-import { useEditor, EditorContent } from '@tiptap/react'
+
+import { useEditor, EditorContent, JSONContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
-import '../app/styles/editor.css'
 import Typography from '@tiptap/extension-typography'
 import Placeholder from '@tiptap/extension-placeholder'
-import MenuBar from './menu-bar'
 import TextAlign from '@tiptap/extension-text-align'
-import RedText from "../../extension/RedText";
-import {diff_match_patch, Diff} from "diff-match-patch";
+import MenuBar from './menu-bar'
+import RedText from '../../extension/RedText'
+import '../app/styles/editor.css'
 import { useState } from 'react'
+import DiffMatchPatch from 'diff-match-patch' // ✅ Correct import
 
 const Tiptap = () => {
-
-  const [initialContent, setInitialContent] = useState<string>('')
+  const [initialContent, setInitialContent] = useState<JSONContent | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [diffHTML, setDiffHTML] = useState<string>('')
 
-  const dmp = new diff_match_patch()
-
-    const editor = useEditor({
-      extensions: [StarterKit.configure({
-        bulletList:{
-          HTMLAttributes:{
-            class: 'list-disc pl-3',
-          },
-        },
-        orderedList:{
-          HTMLAttributes:{
-            class: 'list-decimal pl-3',
-          },
-        },
-      }
-      ),
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        bulletList: { HTMLAttributes: { class: 'list-disc pl-3' } },
+        orderedList: { HTMLAttributes: { class: 'list-decimal pl-3' } },
+      }),
       Highlight.configure({
-        HTMLAttributes: {
-          class: 'hover:bg-red-500',
-          multicolor: true,
-        },
+        HTMLAttributes: { class: 'hover:bg-red-500', multicolor: true },
       }),
-        TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }), 
-      Typography, Placeholder.configure({
-        placeholder: 'Write something amazing...'
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Typography,
+      Placeholder.configure({
+        placeholder: 'Write something amazing...',
       }),
-      RedText],
-      content: '<p>Hello World! 🌎️</p>',
+      RedText,
+    ],
+    content: '<p>Hello World! 🌎️</p>',
 
-      onUpdate({ editor }) {
-        const current = editor.getHTML()
-        generateDiff(initialContent, current)
-      },
-      onCreate({ editor }) {
-        const html = editor.getHTML()
-        setInitialContent(html)
-      },
+    onUpdate({ editor }) {
+      const current = editor.getJSON()
+      if (initialContent) {
+        generateJsonDiff(initialContent, current)
+      }
+    },
 
-      editorProps: {
-        attributes: {
-          class: "min-h-[156px] border rounded-md bg-slate-50 py-2 px-3",
-        },
-      },
-    })
+    onCreate({ editor }) {
+      const json = editor.getJSON()
+      setInitialContent(json)
+    },
 
-    
-  const generateDiff = (oldText: string, newText: string) => {
-    const diffs: Diff[] = dmp.diff_main(oldText, newText)
-    dmp.diff_cleanupSemantic(diffs)
+    editorProps: {
+      attributes: {
+        class: 'min-h-[156px] border rounded-md bg-slate-50 py-2 px-3',
+      },
+    },
+  })
+
+  const generateJsonDiff = (oldJson: JSONContent, newJson: JSONContent) => {
+    const oldText = extractTextFromJson(oldJson)
+    const newText = extractTextFromJson(newJson)
+
+    const diffs = getTextDiffs(oldText, newText)
 
     const formatted = diffs
-      .map(([op, data]) => {
+      .map(([op, text]) => {
         if (op === 1) {
-          return `<span style="background-color: #d1fae5; color: black;">${data}</span>` // green
+          return `<span style="background-color: #d1fae5; color: black;">${text}</span>` // Inserted
         } else if (op === -1) {
-          return `<span style="background-color: #fee2e2; color: black; text-decoration: line-through;">${data}</span>` // red
+          return `<span style="background-color: #fee2e2; color: black; text-decoration: line-through;">${text}</span>` // Deleted
         } else {
-          return `<span style="color: black;">${data}</span>` // normal
+          return `<span style="color: black;">${text}</span>` // Unchanged
         }
       })
       .join('')
@@ -84,75 +75,84 @@ const Tiptap = () => {
     setDiffHTML(formatted)
   }
 
+  const extractTextFromJson = (json: JSONContent): string => {
+    let text = ''
+
+    const walk = (node: any) => {
+      if (node.type === 'text') {
+        text += node.text || ''
+      }
+
+      if (node.content) {
+        node.content.forEach((child: any) => walk(child))
+      }
+    }
+
+    walk(json)
+    return text
+  }
+
+  const getTextDiffs = (oldText: string, newText: string) => {
+    const dmp = new DiffMatchPatch() // ✅ Correct instantiation
+    const diffs = dmp.diff_main(oldText, newText)
+    dmp.diff_cleanupSemantic(diffs)
+    return diffs
+  }
+
   const handleAccept = () => {
     if (editor) {
-      const current = editor.getHTML()
-      setInitialContent(current)
+      const json = editor.getJSON()
+      setInitialContent(json)
       setDiffHTML('')
     }
   }
 
   const handleReject = () => {
-    if (editor) {
+    if (editor && initialContent) {
       editor.commands.setContent(initialContent)
       setDiffHTML('')
     }
   }
-  
-    if (!editor) {
-      return null
-    }
-  
-    return (
-      <div className="editor-wrapper">
-        <div className="editor-toolbar">
-        <button
-          onClick={() => setShowPreview(prev => !prev)}
-          className="text-sm text-blue-600 underline"
-        >
-          {showPreview ? 'Hide Preview' : 'Show Preview'}
-        </button>
-        <button
+
+  if (!editor) return null
+
+  return (
+    <div className='flex'>
+    <div className="editor-wrapper p-4 mx-auto w-1/2">
+      <div className="editor-toolbar flex gap-3 mb-4">
+        
+      
+      </div>
+
+      <MenuBar editor={editor} />
+      <EditorContent editor={editor} />
+
+      
+    </div>
+    <div className="mt-7.5 w-1/2">
+          <h3 className="font-semibold mb-1 py-2 ">Preview Changes:</h3>
+          <div
+            className="border p-3 bg-white text-black whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{ __html: diffHTML }}
+          />
+          {diffHTML && (
+            <div>
+          <button
           onClick={handleAccept}
-          className="bg-green-500 text-white px-3 py-1 rounded"
+          className="bg-green-500 text-white text-xs px-1 py-0.8 cursor-pointer"
         >
           Accept
         </button>
         <button
           onClick={handleReject}
-          className="bg-red-500 text-white px-3 py-1 rounded"
+          className="bg-red-500 text-white text-xs px-1 py-0.8 cursor-pointer"
         >
           Reject
         </button>
-        { (
-          <div className="mt-4">
-            <h3 className="font-semibold mb-1">Preview Changes:</h3>
-            <div
-              className="border p-3 bg-white text-black"
-              dangerouslySetInnerHTML={{ __html: diffHTML }}
-            />
-          </div>
-        )}
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={editor.isActive('bold') ? 'is-active' : ''}
-          >
-            Bold
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={editor.isActive('italic') ? 'is-active' : ''}
-          >
-            Italic
-          </button>
-          {/* Add more toolbar buttons as needed */}
+            </div> )} 
         </div>
-        <MenuBar editor={editor}/>
-        < EditorContent editor={editor} />
-      </div>
-    )
-  }
-  
+    </div>
+  )
+}
 
 export default Tiptap
-
