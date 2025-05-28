@@ -199,11 +199,79 @@ class TiptapTreeDiff {
     }
   
     // Generate HTML with highlighted changes
-    generateDiffHTML(oldTree, newTree) {
+    generateDiffHTML(oldTree, newTree, options = {}) {
       const changes = this.diff(oldTree, newTree);
       const changeMap = this.createChangeMap(changes);
       
-      return this.nodeToHTML(newTree, [], changeMap);
+      const defaultOptions = {
+        showUnchanged: true,    // Show unchanged content
+        showDeleted: false,     // Don't show deleted content by default
+        showAdditions: true,    // Show added content
+        showModifications: true // Show modified content
+      };
+      
+      const opts = { ...defaultOptions, ...options };
+      
+      if (opts.showDeleted) {
+        // Render both old and new trees with changes highlighted
+        return this.renderBothTrees(oldTree, newTree, changeMap, opts);
+      } else {
+        // Render only the new tree with both unchanged and changed content
+        return this.nodeToHTML(newTree, [], changeMap, opts);
+      }
+    }
+  
+    // Render both old and new trees side by side or merged
+    renderBothTrees(oldTree, newTree, changeMap, options) {
+      const oldHTML = this.nodeToHTML(oldTree, [], changeMap, options, 'old');
+      const newHTML = this.nodeToHTML(newTree, [], changeMap, options, 'new');
+      
+      return `
+        <div style="display: flex; gap: 20px;">
+          <div style="flex: 1;">
+            <h3>Before</h3>
+            ${oldHTML}
+          </div>
+          <div style="flex: 1;">
+            <h3>After</h3>
+            ${newHTML}
+          </div>
+        </div>
+      `;
+    }
+  
+    // Generate only changes HTML (no unchanged content)
+    generateChangesOnlyHTML(oldTree, newTree) {
+      const changes = this.diff(oldTree, newTree);
+      
+      return changes.map(change => {
+        let html = '';
+        switch (change.type) {
+          case 'addition':
+            html = this.nodeToHTML(change.newValue, [], new Map(), { showUnchanged: true });
+            return `<div style="border-left: 3px solid #28a745; padding: 10px; margin: 5px 0; background-color: #d4edda;">
+              <strong>Added:</strong> ${html}
+            </div>`;
+          
+          case 'deletion':
+            html = this.nodeToHTML(change.oldValue, [], new Map(), { showUnchanged: true });
+            return `<div style="border-left: 3px solid #dc3545; padding: 10px; margin: 5px 0; background-color: #f8d7da;">
+              <strong>Deleted:</strong> ${html}
+            </div>`;
+          
+          case 'text-modification':
+            return `<div style="border-left: 3px solid #ffc107; padding: 10px; margin: 5px 0; background-color: #fff3cd;">
+              <strong>Changed:</strong><br>
+              <del style="color: #dc3545;">${this.escapeHTML(change.oldValue?.text || '')}</del><br>
+              <ins style="color: #28a745;">${this.escapeHTML(change.newValue?.text || '')}</ins>
+            </div>`;
+            
+          default:
+            return `<div style="border-left: 3px solid #6c757d; padding: 10px; margin: 5px 0; background-color: #f8f9fa;">
+              <strong>${change.type}:</strong> ${change.path}
+            </div>`;
+        }
+      }).join('');
     }
   
     // Create a map of changes by path for easy lookup
@@ -216,7 +284,7 @@ class TiptapTreeDiff {
     }
   
     // Convert node to HTML with diff highlighting
-    nodeToHTML(node, path, changeMap) {
+    nodeToHTML(node, path, changeMap, options = { showUnchanged: true }, treeType = 'new') {
       if (!node) return '';
       
       const currentPath = path.join('.');
@@ -248,9 +316,6 @@ class TiptapTreeDiff {
             case 'text-modification':
               html = `<span style="background-color: #d4edda; color: #155724;">${html}</span>`;
               break;
-            case 'deletion':
-              html = `<span style="background-color: #fee2e2; color: #dc3545; text-decoration: line-through;">${html}</span>`;
-              break;
             case 'marks-modification':
               html = `<span style="background-color: #fff3cd; color: #856404;">${html}</span>`;
               break;
@@ -264,8 +329,13 @@ class TiptapTreeDiff {
       let innerHTML = '';
       if (node.content) {
         innerHTML = node.content
-          .map((child, index) => this.nodeToHTML(child, [...path, 'content', index], changeMap))
+          .map((child, index) => this.nodeToHTML(child, [...path, 'content', index], changeMap, options, treeType))
           .join('');
+      }
+  
+      // Skip rendering unchanged nodes if option is set
+      if (!options.showUnchanged && !change) {
+        return innerHTML; // Return just the children without wrapper
       }
   
       // Apply diff highlighting to container
@@ -276,7 +346,7 @@ class TiptapTreeDiff {
             containerStyle = 'style="border-left: 3px solid #28a745; padding-left: 10px; background-color: #d4edda;"';
             break;
           case 'deletion':
-            containerStyle = 'style="border-left: 3px solid #dc3545; padding-left: 10px; background-color: #fee2e2; text-decoration: line-through; color: #dc3545;"';
+            containerStyle = 'style="border-left: 3px solid #dc3545; padding-left: 10px; background-color: #f8d7da; text-decoration: line-through;"';
             break;
           case 'modification':
             containerStyle = 'style="border-left: 3px solid #ffc107; padding-left: 10px; background-color: #fff3cd;"';
@@ -289,37 +359,32 @@ class TiptapTreeDiff {
         case 'doc':
           return `<div ${containerStyle}>${innerHTML}</div>`;
         case 'paragraph':
-          return `<p ${containerStyle}>${innerHTML}</p>`;
+          // Handle empty paragraphs (empty lines)
+          const paragraphContent = innerHTML || '&nbsp;'; // Non-breaking space for empty lines
+          return `<p ${containerStyle}>${paragraphContent}</p>`;
         case 'heading':
           const level = node.attrs?.level || 1;
-          return `<h${level} ${containerStyle}>${innerHTML}</h${level}>`;
+          const headingContent = innerHTML || '&nbsp;'; // Handle empty headings too
+          return `<h${level} ${containerStyle}>${headingContent}</h${level}>`;
         default:
           return `<div ${containerStyle}>${innerHTML}</div>`;
       }
     }
   
-    // Escape HTML characters
+    // Escape HTML characters (works in both browser and Node.js)
     escapeHTML(text) {
-        if (typeof text !== 'string') return '';
-        
-        // Browser environment
-        if (typeof document !== 'undefined') {
-          const div = document.createElement('div');
-          div.textContent = text;
-          return div.innerHTML;
-        }
-        
-        // Node.js environment - manual escaping
-        return text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      }
+      if (typeof text !== 'string') return '';
+      
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
   }
   
-  // Usage example
+  // Usage examples
   const differ = new TiptapTreeDiff();
   
   // Example trees
@@ -355,12 +420,14 @@ class TiptapTreeDiff {
     ]
   };
   
-  // Get changes
-  const changes = differ.diff(oldTree, newTree);
-  console.log('Changes detected:', changes);
-  
-  // Generate diff HTML
+  // DEFAULT: Show both unchanged and changed content with highlighting
   const diffHTML = differ.generateDiffHTML(oldTree, newTree);
+  
+  // Other options still available:
+  // const changesOnlyHTML = differ.generateChangesOnlyHTML(oldTree, newTree);
+  // const sideBySideHTML = differ.generateDiffHTML(oldTree, newTree, { showDeleted: true });
+  
+  console.log('Default behavior: Shows both unchanged and changed content');
   console.log('Diff HTML:', diffHTML);
   
   export default TiptapTreeDiff;
