@@ -1,5 +1,5 @@
 'use client'
-
+import TipTapTreeDiff from './diff'
 import { useEditor, EditorContent, JSONContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
@@ -11,6 +11,7 @@ import RedText from '../../extension/RedText'
 import '../app/styles/editor.css'
 import { useState } from 'react'
 import DiffMatchPatch from 'diff-match-patch' // ✅ Correct import
+import TiptapTreeDiff from './diff'
 
 const Tiptap = () => {
   const [initialContent, setInitialContent] = useState<JSONContent | null>(null)
@@ -57,7 +58,13 @@ const Tiptap = () => {
   const generateJsonDiff = (oldJson: JSONContent, newJson: JSONContent) => {
     const oldText = extractTextFromJson(oldJson)
     const newText = extractTextFromJson(newJson)
+    console.log('old Json', JSON.stringify(oldJson));
+    console.log('new Json', JSON.stringify(newJson));
+    const differ = new TiptapTreeDiff();
+const changes = differ.diff(oldJson, newJson);
+const diffHTML = differ.generateDiffHTML(oldJson, newJson);
 
+// Insert the diffHTML into your DOM to show highlighted differences
     const diffs = getTextDiffs(oldText, newText)
 
     const formatted = diffs
@@ -72,7 +79,7 @@ const Tiptap = () => {
       })
       .join('')
 
-    setDiffHTML(formatted)
+    setDiffHTML(diffHTML)
   }
 
   const extractTextFromJson = (json: JSONContent): string => {
