@@ -212,6 +212,11 @@ class TiptapTreeDiff {
       
       const opts = { ...defaultOptions, ...options };
       
+      // Always show content, even if there are no changes
+      if (changes.length === 0) {
+        return this.nodeToHTML(newTree, [], new Map(), opts);
+      }
+      
       if (opts.showDeleted) {
         // Render both old and new trees with changes highlighted
         return this.renderBothTrees(oldTree, newTree, changeMap, opts);

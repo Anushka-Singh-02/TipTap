@@ -46,6 +46,8 @@ const Tiptap = () => {
     onCreate({ editor }) {
       const json = editor.getJSON()
       setInitialContent(json)
+      // Generate initial diff to show preview
+      generateJsonDiff(json, json)
     },
 
     editorProps: {
@@ -61,23 +63,8 @@ const Tiptap = () => {
     console.log('old Json', JSON.stringify(oldJson));
     console.log('new Json', JSON.stringify(newJson));
     const differ = new TiptapTreeDiff();
-const changes = differ.diff(oldJson, newJson);
-const diffHTML = differ.generateDiffHTML(oldJson, newJson);
-
-// Insert the diffHTML into your DOM to show highlighted differences
-    const diffs = getTextDiffs(oldText, newText)
-
-    const formatted = diffs
-      .map(([op, text]) => {
-        if (op === 1) {
-          return `<span style="background-color: #d1fae5; color: black;">${text}</span>` // Inserted
-        } else if (op === -1) {
-          return `<span style="background-color: #fee2e2; color: black; text-decoration: line-through;">${text}</span>` // Deleted
-        } else {
-          return `<span style="color: black;">${text}</span>` // Unchanged
-        }
-      })
-      .join('')
+    const changes = differ.diff(oldJson, newJson);
+    const diffHTML = differ.generateDiffHTML(oldJson, newJson, { showUnchanged: true });
 
     setDiffHTML(diffHTML)
   }
@@ -110,14 +97,16 @@ const diffHTML = differ.generateDiffHTML(oldJson, newJson);
     if (editor) {
       const json = editor.getJSON()
       setInitialContent(json)
-      setDiffHTML('')
+      // Generate diff with the same content to keep preview visible
+      generateJsonDiff(json, json)
     }
   }
 
   const handleReject = () => {
     if (editor && initialContent) {
       editor.commands.setContent(initialContent)
-      setDiffHTML('')
+      // Generate diff with the same content to keep preview visible
+      generateJsonDiff(initialContent, initialContent)
     }
   }
 
